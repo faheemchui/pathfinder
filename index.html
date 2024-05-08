@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Metadata -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Trail Finder in the City of Toronto</title>
+
+    <!-- Mapbox CSS -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
+
+    <!-- Mapbox JavaScript -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+
+    <!-- Mapbox Directions CSS -->
+    <link href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.0/mapbox-gl-directions.css' rel='stylesheet' />
+
+    <!-- Mapbox Directions JavaScript -->
+    <script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.0/mapbox-gl-directions.js'></script>
+
+    <!-- Turf.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.0.0/turf.min.js"></script>
+
+    <style>
+        #map {
+            position: absolute;
+            left: 20%;
+            top: 0;
+            bottom: 0;
+            width: 80%;
+        }
+        #message-box {
+            position: absolute;
+            top: 70px; /* Adjust as needed to align with the search box */
+            right: 60px;
+            width: 290px;
+            height: 200px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid #ccc;
+            padding: 10px;
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            color: #404040;
+            z-index:1000;
+        }
+    
+        #search-box {
+            position: absolute;
+            top: 10px; /* Adjust as needed */
+            right: 60px; /* Adjust as needed */
+            display: inline-block;
+            background-color: #3887be;
+            color: #ffffff;
+            padding: 10px;
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            border-radius: 3px;
+        }
+
+        #reset-button {
+            position: relative;
+            top: 0; /* Reset vertical position if necessary */
+            right: 5px;
+            background-color: #3887be;
+            color: #ffffff;
+            border: none;
+            padding: 10px; /* Adjusted padding to match the search button */
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .map-overlay {
+            position: absolute;
+            width: 20%;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            font:
+                12px/20px 'Helvetica Neue',
+                Arial,
+                Helvetica,
+                sans-serif;
+            background-color: #efefef;
+            max-height: 100%;
+            overflow: hidden;
+        }
+    
+        .map-overlay fieldset {
+            display: none;
+            background: #ddd;
+            border: none;
+            padding: 10px;
+            margin: 0;
+        }
+    
+        .map-overlay input {
+            display: block;
+            border: none;
+            width: 100%;
+            border-radius: 3px;
+            padding: 10px;
+            margin: 0;
+            box-sizing: border-box;
+        }
+    
+        .map-overlay .listing {
+            overflow: auto;
+            max-height: 100%;
+        }
+    
+        .map-overlay .listing > * {
+            display: block;
+            padding: 5px 10px;
+            margin: 0;
+        }
+    
+        .map-overlay .listing a {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            color: #404;
+            text-decoration: none;
+        }
+    
+        .map-overlay .listing a:last-child {
+            border: none;
+        }
+    
+        .map-overlay .listing a:hover {
+            background: #f0f0f0;
+        }
+        /*menu is fliiping walking and bicycle*/
+        #menu {
+        background: #fff;
+        position: absolute;
+        z-index: 1000;
+        bottom:80px;    /*adjust for future, should be sth more than 10 less than 100*/
+        right: 10px;
+        border-radius: 3px;
+        width: 140px;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        font-family: 'Open Sans', sans-serif;
+        }
+
+        #menu a {
+            font-size: 13px;
+            color: #404040;
+            display: block;
+            margin: 0;
+            padding: 0;
+            padding: 10px;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+            text-align: center;
+        }
+
+        #menu a:last-child {
+            border: none;
+        }
+
+        #menu a:hover {
+            background-color: #f8f8f8;
+            color: #404040;
+        }
+
+        #menu a.active {
+            background-color: #3887be;
+            color: #ffffff;
+        }
+
+        #menu a.active:hover {
+            background: #3074a4;
+        }
+
+        .listing-group {
+            font:
+                12px/20px 'Helvetica Neue',
+                Arial,
+                Helvetica,
+                sans-serif;
+            font-weight: 600;
+            position: absolute;
+            bottom: 20px;
+            right: 5px;
+            z-index: 1;
+            border-radius: 3px;
+            max-width: 20%;
+            color: #fff;
+        }
+
+        .listing-group input[type='checkbox']:first-child + label {
+            border-radius: 3px 3px 0 0;
+        }
+
+        .listing-group label:last-child {
+            border-radius: 0 0 3px 3px;
+            border: none;
+        }
+
+        .listing-group input[type='checkbox'] {
+            display: none;
+        }
+
+        .listing-group input[type='checkbox'] + label {
+            background-color: #3386c0;
+            display: block;
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+        }
+
+        .listing-group input[type='checkbox'] + label {
+            background-color: #3386c0;
+            text-transform: capitalize;
+        }
+
+        .listing-group input[type='checkbox'] + label:hover,
+        .listing-group input[type='checkbox']:checked + label {
+            background-color: #4ea0da;
+        }
+
+        .listing-group input[type='checkbox']:checked + label:before {
+            content: '✔';
+        }
+        
+        .mapboxgl-ctrl-fullscreen {
+            z-index: 1000; /* Ensure fullscreen control is on top */
+        }
+        
+        #message-box-2 {
+        position: absolute;
+        bottom: 20px; /* Adjust as needed */
+        right:165px; /* Center horizontally */
+        transform: translateX(-50%);
+        width: 500px;
+        height: 100px;
+        background-color: rgba(255, 255, 255, 0.8);
+        overflow-y: auto !important; /* Enable vertical scrolling */
+        border: 1px solid #ccc;
+        padding: 10px;
+        font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+        color: #404040;
+        z-index: 1000;
+}
+
+        #message-box-3 {
+            position: absolute;
+            bottom: 20px; /* Adjust as needed */
+            right: 20px; /* Adjust as needed */
+            transform: translateX(-50%);
+            width: 250px;
+            height: 100px;
+            background-color: rgba(255, 255, 255, 0.8);
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            color: #404040;
+            z-index: 1000;
+        }
+
+    </style>
+</head>
+<body>
+    <nav id="menu"></nav>
+    <div id="map"></div>
+    <div id="route-planner-options" class="listing-group">
+        <input type="checkbox" id="showRoutePlanner" checked="checked">
+        <label for="showRoutePlanner">Show Route Planner</label>
+    </div>
+    <div class="map-overlay">
+        <fieldset>
+            <input id="feature-filter" type="text" placeholder="Filter results by name">
+        </fieldset>
+        <div id="feature-listing" class="listing"></div>
+    
+    </div>
+
+    <div id='message-box'>
+        <h3>instructions</h3>
+        <p>Please click any of the layers first, then insert any location to output the five nearest route on selected location.</p>
+        <p>
+            Additionally, you can click on any trails if their respective layer is active and the route planner is deactivated. These controller are located at the bottom.
+        </p>
+    </div>
+    
+    <div id='search-box'>
+        <input type='text' id='search-input' placeholder='Search for a location...' />
+        <button onclick='searchLocation()'>Search</button>
+        <button id='reset-button' onclick='resetMap()'>Reset</button>
+    </div>
+     <!-- Message Box 2 for purpose of the map service -->
+    <div id="message-box-2"></div>
+    <!-- Message Box 3 for basic information -->
+    <div id="message-box-3">
+        <!-- Content will be dynamically added -->
+    </div>
+
+<script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZmFoZWVtY2h1aSIsImEiOiJjbHR1dDdkenExam5nMmpxd2RjY2wzeXlrIn0.E3SOk0DggJQPbvflfHwSqw';
+    const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v10',
+            center: [-79.3832, 43.6532],
+            zoom: 11,
+            scrollZoom: true
+        });
+
+       // Encapsulate map interactions within the load event listener
+map.on('load', function () {
+    // Add controls and event listeners
+    map.addControl(new mapboxgl.NavigationControl());
+    map.addControl(new mapboxgl.FullscreenControl());
+    map.addControl(new mapboxgl.GeolocateControl({
+        positionOptions: {
+            enableHighAccuracy: true
+        },
+        trackUserLocation: true
+    }));
+    map.addControl(new mapboxgl.ScaleControl({
+        maxWidth: 80,
+        unit: 'Metric'
+    }));
+    console.log("Map loaded.");
+
+    // Define message2 variable with the specified content
+    var message2 = "Purpose: Map for day camp staff & public to discover trails, Toronto Boundaries, camp locations with contact info. Geolocation helps find nearest spots. Mapbox showcases day camp locations, aiding route planning. Target users: Day camp staff, parents, locals, trail enthusiasts."
+
+    // Define message3 variable with the specified content
+    var message3 = "Title: Trail Finder in the City of Toronto<br>" +
+        "Map projection: cylindrical projections<br>" +
+        "Data Source: City of Toronto(2024)<br>" +
+        "Publish Date: 2024 April 14<br>" +
+        "Name: Chung Chui";
+
+    // Function to update content of messageBox2
+    function updateMessageBox2() {
+        var messageBox2 = document.getElementById('message-box-2');
+        messageBox2.innerHTML = message2;
+    }
+
+    // Call the function to update messageBox2
+    updateMessageBox2();
+
+    // Function to update content of messageBox3
+    function updateMessageBox3() {
+        var messageBox3 = document.getElementById('message-box-3');
+        messageBox3.innerHTML = message3;
+    }
+
+    // Call the function to update messageBox3
+    updateMessageBox3();
+
+});
+    
+
+    // Holds visible airport features for filtering
+    let airports = [];
+
+    // Create a popup, but don't add it to the map yet.
+    const popup = new mapboxgl.Popup({
+        closeButton: false
+    });
+
+    const filterEl = document.getElementById('feature-filter');
+    const listingEl = document.getElementById('feature-listing');
+
+    console.log("Filter and listing elements fetched.");
+
+    function renderListings(features) {
+        console.log("Rendering listings...");
+        const empty = document.createElement('p');
+        // Clear any existing listings
+        listingEl.innerHTML = '';
+        if (features.length) {
+            for (const feature of features) {
+                const itemLink = document.createElement('a');
+                const label = `${feature.properties.USER_Name || 'Unknown'}`;
+                itemLink.target = '_blank';
+                itemLink.textContent = label;
+                itemLink.addEventListener('mouseover', () => {
+                    const contentHTML = `<p>${feature.properties.Place_addr || 'Unknown Address'}</p>
+                    <p>${feature.properties.USER_Phone || 'Unknown Phone'}</p>`;
+                    
+                    // Highlight corresponding feature on the map
+                    popup
+                        .setLngLat(feature.geometry.coordinates)
+                        .setHTML(`<h2>${label}</h2>${contentHTML}`)
+                        .addTo(map);
+                });
+                listingEl.appendChild(itemLink);
+            }
+            // Show the filter input
+            filterEl.parentNode.style.display = 'block';
+        } else if (features.length === 0 && filterEl.value !== '') {
+            empty.textContent = 'No results found';
+            listingEl.appendChild(empty);
+        } else {
+            empty.textContent = 'Drag the map to populate results';
+            listingEl.appendChild(empty);
+
+            // Hide the filter input
+            filterEl.parentNode.style.display = 'none';
+
+            // remove features filter
+            map.setFilter('airport');
+        }
+    }
+
+    console.log("Normalization function defined.");
+
+    function normalize(string) {
+        return string.trim().toLowerCase();
+    }
+
+    console.log("Unique features function defined.");
+
+    // Because features come from tiled vector data,
+    // feature geometries may be split
+    // or duplicated across tile boundaries.
+    // As a result, features may appear
+    // multiple times in query results.
+    function getUniqueFeatures(features, comparatorProperty) {
+        const uniqueIds = new Set();
+        const uniqueFeatures = [];
+        for (const feature of features) {
+            const id = feature.properties[comparatorProperty];
+            if (!uniqueIds.has(id)) {
+                uniqueIds.add(id);
+                uniqueFeatures.push(feature);
+            }
+        }
+        return uniqueFeatures;
+    }
+
+    // Load event handler set.
+    map.on('load', function () {
+        console.log("Load event handler set.");
+
+        map.addSource('airport', {
+            'sourceLayer': 'Toronto_DC-a6xi63',
+            'type': 'vector',
+            'url': 'mapbox://faheemchui.32eit8u2'
+        });
+
+        console.log("Airport source added.");
+
+        map.addLayer({
+            'id': 'airport',
+            'source': 'airport',
+            'source-layer': 'Toronto_DC-a6xi63',
+            'type': 'circle',
+            'paint': {
+                'circle-color': '#4264fb',
+                'circle-radius': 4,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff'
+            }
+        });
+
+        console.log("Airport layer added.");
+
+        map.on('movestart', () => {
+            // reset features filter as the map starts moving
+            map.setFilter('airport', ['has', 'USER_Name']);
+        });
+
+        map.on('moveend', () => {
+            const features = map.queryRenderedFeatures({ layers: ['airport'] });
+
+            if (features) {
+                const uniqueFeatures = getUniqueFeatures(features, 'USER_Name');
+                // Populate features for the listing overlay.
+                renderListings(uniqueFeatures);
+
+                // Clear the input container
+                filterEl.value = '';
+
+                // Store the current features in `airports` variable to
+                // later use for filtering on `keyup`.
+                airports = uniqueFeatures;
+            }
+        });
+
+        map.on('mousemove', 'airport', (e) => {
+            // Change the cursor style as a UI indicator.
+            map.getCanvas().style.cursor = 'pointer';
+
+            // Populate the popup and set its coordinates based on the feature.
+            const feature = e.features[0];
+            const contentHTML = `<p>${feature.properties.Place_addr || 'Unknown Address'}</p>
+                         <p>${feature.properties.USER_Phone || 'Unknown Phone'}</p>`;
+            popup
+                .setLngLat(feature.geometry.coordinates)
+                .setHTML(`<h2>${feature.properties.USER_Name}</h2>${contentHTML}`)
+                .addTo(map);
+        });
+
+        map.on('mouseleave', 'airport', () => {
+            map.getCanvas().style.cursor = '';
+            popup.remove();
+        });
+
+        filterEl.addEventListener('keyup', (e) => {
+            const value = normalize(e.target.value);
+
+            // Filter visible features that match the input value.
+            const filtered = [];
+            for (const feature of airports) {
+                const name = normalize(feature.properties.USER_Name);
+                if (name.includes(value)) {
+                    filtered.push(feature);
+                }
+            }
+
+            // Populate the sidebar with filtered results
+            renderListings(filtered);
+
+            // Set the filter to populate features into the layer.
+            if (filtered.length) {
+                map.setFilter('airport', [
+                    'match',
+                    ['get', 'USER_Name'],
+                    filtered.map((feature) => {
+                        return feature.properties.USER_Name;
+                    }),
+                    true,
+                    false
+                ]);
+            }
+        });
+
+        // Call this function on initialization
+        // passing an empty array to render an empty state
+        renderListings([]);
+
+    });
+
+// Additional layers
+map.on('load', function () {
+    // Add the "To_ByclcTrl-23lspb" layer with Light Green: #7CFC00
+    map.addLayer({
+        'id': 'Bicycle',
+        'type': 'line',
+        'source': {
+            'type': 'vector',
+            'url': 'mapbox://faheemchui.3h5pha7a' // ID of your vector tileset
+        },
+        'source-layer': 'To_ByclcTrl-23lspb',
+        'layout': {},
+        'paint': {
+            'line-color': '#7CFC00',
+            'line-width': 2
+        },
+        'visibility': 'none'
+    });
+
+    // Add the "To_WalkiTrl-2ijivd" layer with Light Brown: #D2B48C
+    map.addLayer({
+        'id': 'Walking',
+        'type': 'line',
+        'source': {
+            'type': 'vector',
+            'url': 'mapbox://faheemchui.5qtxsabg' // ID of your vector tileset
+        },
+        'source-layer': 'To_WalkiTrl-2ijivd',
+        'layout': {},
+        'paint': {
+            'line-color': '#D2B48C',
+            'line-width': 2
+        },
+        'visibility': 'none'
+    });
+
+    // Add the "Boundary" layer with black color and 2px thickness
+    map.addLayer({
+        'id': 'Boundary',
+        'type': 'line',
+        'source': {
+            'type': 'vector',
+            'url': 'mapbox://faheemchui.ds3mer70' // URL of your vector tileset
+        },
+        'source-layer': 'TorontoBo-99c2v2', // Source layer name
+        'layout': {},
+        'paint': {
+            'line-color': '#000000', // Black color
+            'line-width': 2, // 2px thickness
+            'fill-opacity': 0 // Set fill opacity to 0 to hide any fill
+        }
+    });
+    // Move the "Boundary" layer to the bottom
+    map.moveLayer('Boundary');
+});
+
+
+    //Reset Map
+    map.on('click', function () {
+        marker.remove();
+        resetMessageBox(); // Reset message box
+        console.log('Marker removed');
+    });
+
+    // Function to show trail name and length when clicked
+    function showTrailInfo(e) {
+        var features = map.queryRenderedFeatures(e.point, { layers: ['Bicycle', 'Walking'] });
+
+        if (!features.length) {
+            return;
+        }
+
+        var feature = features[0];
+        var trailName = feature.properties.TRAIL_NAME;
+        var trailLength = feature.properties.TRAIL_LENGTH_KM;
+
+        // Close any existing popup
+        popup.remove();
+
+        // Create a new popup with trail name and length
+        popup.setLngLat(e.lngLat)
+            .setHTML('<h3>' + trailName + ' ' + trailLength.toFixed(2) + ' (km)</h3>')
+            .addTo(map);
+    }
+
+    // Listen for clicks on the map and call showTrailInfo function
+    map.on('click', function (e) {
+        showTrailInfo(e);
+    });
+
+
+    map.on('idle', () => {
+    // If these two layers were not added to the map, abort
+    if (!map.getLayer('Walking') || !map.getLayer('Bicycle')) {
+        return;
+    }
+
+    const toggleableLayerIds = ['Walking', 'Bicycle'];
+
+    // Keep track of the active layer
+    let activeLayer = null;
+
+    for (const id of toggleableLayerIds) {
+        // Skip layers that already have a button set up.
+        if (document.getElementById(id)) {
+            continue;
+        }
+
+        const link = document.createElement('a');
+        link.id = id;
+        link.href = '#';
+        link.textContent = id;
+        link.className = 'inactive'; // Initialize as inactive
+
+        link.onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clickedLayer = this.textContent;
+
+    // Check if another layer is active
+    if (activeLayer && activeLayer !== clickedLayer) {
+        // Turn off the active layer
+        map.setLayoutProperty(activeLayer, 'visibility', 'none');
+        document.getElementById(activeLayer).className = 'inactive';
+    }
+
+    const visibility = map.getLayoutProperty(clickedLayer, 'visibility');
+
+    if (visibility === 'visible') {
+        map.setLayoutProperty(clickedLayer, 'visibility', 'none');
+        this.className = 'inactive';
+        activeLayer = null; // No active layer
+    } else {
+        this.className = 'active';
+        map.setLayoutProperty(clickedLayer, 'visibility', 'visible');
+        activeLayer = clickedLayer;
+    }
+
+    // Set activeLayer before calling calculateNearestTrail(coordinates)
+    calculateNearestTrail(map.getCenter());
+};
+
+        const layers = document.getElementById('menu');
+        layers.appendChild(link);
+
+         // Set the layers to initially invisible
+         map.setLayoutProperty(id, 'visibility', 'none');
+    }
+    });
+
+   // Variable to track whether route planner is enabled
+    var routePlannerEnabled = true;
+
+    // Add event listener for toggling route planner visibility
+    document.getElementById('showRoutePlanner').addEventListener('change', function(e) {
+        var directionsControl = document.querySelector('.mapboxgl-ctrl-directions');
+        if (e.target.checked) {
+            directionsControl.style.display = 'block';
+            routePlannerEnabled = true;
+            // Re-enable map interaction
+            map.setOptions({ dragPan: true, scrollZoom: true });
+        } else {
+            directionsControl.style.display = 'none';
+            routePlannerEnabled = false;
+            // Clear existing routes
+            directions.removeRoutes();
+            // Disable map interaction
+            map.setOptions({ dragPan: false, scrollZoom: false });
+        }
+    });
+    //Playground for testing route
+
+    // Add the Mapbox Directions control
+    var directions = new MapboxDirections({
+            accessToken: mapboxgl.accessToken,
+            unit: 'metric', // or 'imperial'
+            profile: 'mapbox/walking', // Specify the profile to use
+            controls: {
+                instructions: true
+            }
+        });
+
+    // Add the control to the map
+    map.addControl(directions, 'top-left');
+
+// Variable to track whether route planner is enabled
+    var routePlannerEnabled = true;
+
+// Add event listener for toggling route planner visibility
+    document.getElementById('showRoutePlanner').addEventListener('change', function(e) {
+        var directionsControl = document.querySelector('.mapboxgl-ctrl-directions');
+        if (e.target.checked) {
+            directionsControl.style.display = 'block';
+            routePlannerEnabled = true;
+            // Re-enable map interaction
+            map.setOptions({ dragPan: true, scrollZoom: true });
+        } else {
+            directionsControl.style.display = 'none';
+            routePlannerEnabled = false;
+            // Clear existing routes
+             directions.removeRoutes();
+            // Disable map interaction
+            map.setOptions({ dragPan: false, scrollZoom: false });
+        }
+    });
+
+    // Add event listener for clicks on the map to prevent routing when route planner is disabled
+    map.on('click', function(e) {
+        if (!routePlannerEnabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            // If route planner is disabled, calculate nearest trail
+            calculateNearestTrail(e.lngLat);
+        }
+    });
+//Playground for searchbox and message
+var marker = new mapboxgl.Marker();
+var messageBox = document.getElementById('message-box');
+
+function searchLocation() {
+    var query = document.getElementById('search-input').value;
+    if (query) {
+        fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${mapboxgl.accessToken}`)
+            .then(response => response.json())
+            .then(data => {
+                var coordinates = data.features[0].center;
+                map.flyTo({
+                    center: coordinates,
+                    zoom: 14
+                });
+
+                // Place marker
+                marker.setLngLat(coordinates).addTo(map);
+
+                // Calculate nearest trail
+                calculateNearestTrail(coordinates);
+                console.log('Search marker placed:', coordinates);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+}
+
+function calculateNearestTrail(coordinates) {
+    var walkingLayerVisible = map.getLayoutProperty('Walking', 'visibility') === 'visible';
+    var bicycleLayerVisible = map.getLayoutProperty('Bicycle', 'visibility') === 'visible';
+
+    if (walkingLayerVisible || bicycleLayerVisible) {
+        var walkingFeatures = [];
+        var bicycleFeatures = [];
+
+        if (walkingLayerVisible) {
+            walkingFeatures = map.queryRenderedFeatures({ layers: ['Walking'] });
+        }
+        if (bicycleLayerVisible) {
+            bicycleFeatures = map.queryRenderedFeatures({ layers: ['Bicycle'] });
+        }
+
+        var allFeatures = walkingFeatures.concat(bicycleFeatures);
+
+        if (allFeatures.length > 0) {
+            // Extract trail names from the features
+            var nearestTrails = allFeatures.map(feature => feature.properties.TRAIL_NAME);
+
+            // Display the names of the five nearest trails
+            updateMessageBox(nearestTrails.slice(0, 5).join('<br>'));
+            return;
+        }
+    }
+
+    // If no features found or no visible layers, clear message box
+    updateMessageBox('');
+}
+    var layers = map.getStyle().layers;
+    var layerVisible = false;
+
+    layers.forEach(layer => {
+        if (layer.id === 'Bicycle' && map.getLayoutProperty(layer.id, 'visibility') === 'visible') {
+            layerVisible = true;
+        }
+    });
+
+    var layerId = layerVisible ? 'Bicycle' : 'Walking';
+
+    // Query features from the 'Bicycle' or 'Walking' layer at the marker's coordinates
+    var features = map.queryRenderedFeatures({ layers: [layerId] });
+    
+    // Extract trail names from the features
+    var nearestTrails = features.map(feature => feature.properties.TRAIL_NAME);
+    
+    // Display the names of the five nearest trails
+    updateMessageBox(nearestTrails.slice(0, 5).join('<br>'));
+
+
+function resetMessageBox() {
+    messageBox.innerHTML = '<h3>Instructions</h3><p>Please click any of the layers first, then insert any location to output the five nearest routes from the selected location.</p><p>Additionally, you can click on any trails if their respective layer is active and the route planner is deactivated. The controllers are located at the bottom right.</p>';
+}
+
+function updateMessageBox(message) {
+    if (message) {
+        messageBox.innerHTML = '<h3>Nearest Trails</h3>' + message;
+    } else {
+        resetMessageBox(); // If no trails are shown, reset to default message
+    }
+}
+
+
+
+
+function resetMap() {
+    marker.remove();
+    resetMessageBox(); // Reset message box
+    console.log('Map reset');
+}
+
+map.on('click', function () {
+        marker.remove();
+        resetMessageBox(); // Reset message box
+        console.log('Marker removed');
+    });
+
+        
+// Add navigation control (zoom in/out buttons)
+        map.addControl(new mapboxgl.NavigationControl());
+
+        // Add full screen control
+        map.addControl(new mapboxgl.FullscreenControl());
+
+        // Add geolocate control
+        map.addControl(new mapboxgl.GeolocateControl({
+            positionOptions: {
+                enableHighAccuracy: true
+            },
+            trackUserLocation: true
+        }));
+
+        // Add scale control
+        map.addControl(new mapboxgl.ScaleControl({
+            maxWidth: 80,
+            unit: 'imperial'
+        }));
+
+
+</script>
+
+</body>
+</html>
